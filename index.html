@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Swim Menu Studio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @page { size: landscape; margin: 0.5cm; }
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white; padding: 0; }
+            .page-container { box-shadow: none; width: 100%; max-width: 100%; padding: 0; }
+            table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+            input, select { -webkit-print-color-adjust: exact; print-color-adjust: exact; border: 1px solid #cbd5e1 !important; }
+            .bg-teal-800 { background-color: #115e59 !important; -webkit-print-color-adjust: exact; color: white !important; }
+        }
+        input, select { background: transparent; padding: 0 2px; text-align: center; border-radius: 2px; height: 22px; font-size: 10px; }
+        input:focus { outline: 1px solid #0f766e; }
+        input::placeholder { font-size: 9px; color: #cbd5e1; }
+        input[type="number"] { -moz-appearance: textfield; }
+        input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
+    </style>
+</head>
+<body class="bg-slate-50 py-2">
+    <div class="page-container max-w-5xl mx-auto bg-white p-4 shadow-xl border border-slate-100 rounded-lg">
+        <div class="no-print flex justify-between items-center mb-3 border-b border-teal-100 pb-2">
+            <h1 class="text-lg font-black text-teal-900">Swim Menu Studio</h1>
+            <div class="flex gap-2">
+                <button onclick="resetData()" class="bg-slate-200 text-slate-700 px-3 py-1 rounded font-bold text-xs hover:bg-slate-300">Reset All</button>
+                <button onclick="window.print()" class="bg-teal-700 text-white px-3 py-1 rounded font-bold text-xs hover:bg-teal-800">PDFで保存</button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2 mb-2 bg-slate-50 p-2 rounded border">
+            <div><label class="block text-[8px] font-bold text-teal-800">TITLE</label><input type="text" id="menuTitle" class="w-full border bg-white h-7 save"></div>
+            <div><label class="block text-[8px] font-bold text-teal-800">MADE BY</label><input type="text" id="authorName" class="w-full border bg-white h-7 save"></div>
+            <div><label class="block text-[8px] font-bold text-teal-800">DATE</label><input type="date" id="menuDate" class="w-full border bg-white h-7 save"></div>
+        </div>
+
+        <div class="mb-3 px-1">
+            <label class="block text-[8px] font-bold text-slate-500 uppercase">Today's Targets</label>
+            <input type="text" id="menuTargets" placeholder="目標を入力..." class="w-full border bg-white h-7 text-[10px] save">
+        </div>
+
+        <table class="w-full border border-slate-300 text-[10px]">
+            <thead class="bg-teal-800 text-white">
+                <tr>
+                    <th class="p-1 w-14">Type</th>
+                    <th class="p-1">距離 × 本数 × セット</th>
+                    <th class="p-1 w-16">Cycle</th>
+                    <th class="p-1 w-20">Style</th>
+                    <th class="p-1">Description</th>
+                    <th class="p-1 w-12">合計</th>
+                    <th class="p-1 w-12">累積</th>
+                    <th class="no-print p-1 w-6"></th>
+                </tr>
+            </thead>
+            <tbody id="menuBody"></tbody>
+        </table>
+
+        <button onclick="addRow()" class="no-print mt-1 text-[10px] text-teal-700 font-bold border border-dashed border-teal-300 w-full hover:bg-teal-50">＋ 行を追加</button>
+        
+        <div class="mt-2 flex justify-end items-baseline gap-1">
+            <span class="text-[9px] font-bold text-slate-400">TOTAL DISTANCE</span>
+            <span id="totalDistance" class="text-2xl font-black text-teal-800">0</span>
+            <span class="text-xs font-bold text-teal-600">m</span>
+        </div>
+    </div>
+
+    <script>
+        const types = ["W-up", "Kick", "Pull", "Drill", "Swim", "Main", "Down", "Loosen", "Others"];
+
+        function save() {
+            const data = {
+                title: document.getElementById('menuTitle').value,
+                author: document.getElementById('authorName').value,
+                date: document.getElementById('menuDate').value,
+                targets: document.getElementById('menuTargets').value,
+                rows: Array.from(document.querySelectorAll('#menuBody tr')).map(tr => ({
+                    type: tr.querySelector('select').value,
+                    d: tr.querySelectorAll('input')[0].value,
+                    c: tr.querySelectorAll('input')[1].value,
+                    s: tr.querySelectorAll('input')[2].value,
+                    cycle: tr.querySelectorAll('input')[3].value,
+                    style: tr.querySelectorAll('input')[4].value,
+                    desc: tr.querySelectorAll('input')[5].value
+                }))
+            };
+            localStorage.setItem('swimMenuData', JSON.stringify(data));
+        }
+
+        function load() {
+            const saved = localStorage.getItem('swimMenuData');
+            if (!saved) {
+                // デフォルト日付を2025-01-01に設定
+                document.getElementById('menuDate').value = '2025-01-01';
+                for(let i=0; i<3; i++) addRow();
+                return;
+            }
+            const data = JSON.parse(saved);
+            document.getElementById('menuTitle').value = data.title;
+            document.getElementById('authorName').value = data.author;
+            document.getElementById('menuDate').value = data.date;
+            document.getElementById('menuTargets').value = data.targets;
+            data.rows.forEach(r => addRow(r));
+            calculate();
+        }
+
+        function resetData() {
+            if(confirm('全てのデータをリセットしますか？')) {
+                localStorage.removeItem('swimMenuData');
+                location.reload();
+            }
+        }
+
+        function addRow(val = {}) {
+            const tr = document.createElement('tr');
+            tr.className = "border-b";
+            tr.innerHTML = `
+                <td class="p-0.5"><select class="w-full bg-white border h-6 text-[10px]">${types.map(t => `<option ${val.type === t ? 'selected' : ''}>${t}</option>`).join('')}</select></td>
+                <td class="p-0.5 flex gap-0.5 justify-center">
+                    <input type="number" value="${val.d||''}" class="w-8 border bg-white" oninput="calculate(); save()" placeholder="距離">
+                    <span class="text-[10px] text-slate-400">×</span>
+                    <input type="number" value="${val.c||''}" class="w-6 border bg-white" oninput="calculate(); save()" placeholder="本">
+                    <span class="text-[10px] text-slate-400">×</span>
+                    <input type="number" value="${val.s||''}" class="w-6 border bg-white" oninput="calculate(); save()" placeholder="S">
+                </td>
+                <td class="p-0.5"><input type="text" value="${val.cycle||''}" class="w-full border bg-white save"></td>
+                <td class="p-0.5"><input type="text" value="${val.style||''}" class="w-full border bg-white save"></td>
+                <td class="p-0.5"><input type="text" value="${val.desc||''}" class="w-full border bg-white save"></td>
+                <td class="subtotal p-0.5 text-center font-bold text-teal-800">0</td>
+                <td class="cumulative p-0.5 text-center font-bold">0</td>
+                <td class="no-print p-0.5 text-center"><button onclick="this.closest('tr').remove(); calculate(); save()" class="text-slate-300">✕</button></td>
+            `;
+            document.getElementById('menuBody').appendChild(tr);
+            tr.querySelectorAll('.save, select').forEach(el => el.addEventListener('change', save));
+        }
+
+        function calculate() {
+            let total = 0;
+            document.querySelectorAll('#menuBody tr').forEach(row => {
+                const inputs = row.querySelectorAll('input[type="number"]');
+                const sub = (parseInt(inputs[0].value) || 0) * (parseInt(inputs[1].value) || 0) * (parseInt(inputs[2].value) || 0);
+                row.querySelector('.subtotal').innerText = sub;
+                total += sub;
+                row.querySelector('.cumulative').innerText = total;
+            });
+            document.getElementById('totalDistance').innerText = total;
+        }
+
+        load();
+    </script>
+</body>
+</html>
